@@ -66,3 +66,12 @@ https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7300433
 - imhmin https://www.mathworks.com/help/images/ref/imhmin.html
 - 
 - 
+
+
+
+
+# NOTES
+- max vrednosti slike budu bas bas male posle morfoloskih operacija
+    mozda treba da se rescaleuje nesto ili nmp ne znam ni sto su tako male treba proveriti
+- 
+
