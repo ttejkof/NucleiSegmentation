@@ -15,7 +15,7 @@ def normalize01(x):
     return (x - x.min()) / rng if rng != 0 else np.zeros_like(x)
 
 def frst(img, radii, std):
-    O_n = np.zeros_like(img, np.uint8)
+    O_n = np.zeros_like(img, np.int8)
     pad_val = np.max(radii)
     O_n = np.pad(O_n, pad_val)
 
@@ -40,13 +40,14 @@ def frst(img, radii, std):
                 O_n[ppve] += 1
                 
                 pnve = (i-gpx[i,j], j - gpy[i,j])
-                O_n[pnve] += 1
+                O_n[pnve] -= 1
         
 
 
     
-    if np.max(O_n) > 0:
-        O_n =  O_n/ float(np.max(O_n))
+    O_n_max = float(np.max(np.abs(O_n)))
+    if O_n_max > 0:
+        O_n =  O_n / O_n_max
     
     S = ski.filters.gaussian(O_n, std)
 
@@ -66,10 +67,10 @@ def morphological(h, n, panels):
     closing2 = ski.morphology.closing(closing, ski.morphology.disk(int(n/2)))
 
     # flipped for better visibility
-    print(np.max(h))
-    print(np.max(opening))
-    print(np.max(closing))
-    print(np.max(closing2))
+    # print(np.max(h))
+    # print(np.max(opening))
+    # print(np.max(closing))
+    # print(np.max(closing2))
 
 
     # negative for better visualisation
@@ -81,13 +82,24 @@ def morphological(h, n, panels):
         (f"Closing2, n={n}", 1-closing2, 'gray'),
         ("mask", mask, 'tab20')
     ]
+
     res = ski.exposure.rescale_intensity(closing2, out_range=(0,255))
     return res, panels
+
+def extended_minima(img, h):
+    mask = img.copy()
+    marker = mask + h
+    hmin = ski.morphology.reconstruction(marker, mask, method='erosion')
+    res = ski.morphology.local_minima(hmin, allow_borders=True)
+    return res, hmin
+
 
 def segment_nuclei(image, mask):
     hed = ski.color.rgb2hed(image)
 
     h = hed[:, :, 0]
+    # for testing
+    h = ski.exposure.rescale_intensity(mask, out_range=(0,1))
 
     N = [5, 11, 15, 33]
     panels = {}
@@ -97,10 +109,28 @@ def segment_nuclei(image, mask):
 
         radii = np.array(range(n, 2*n))
 
-        frst_res = frst(res, radii, std=0)
+        frst_res = frst(res, radii, std=0.2*n)
+        panels[n].append(('frst', ski.exposure.rescale_intensity(frst_res, out_range=(0,1)), 'gray'))
+        # panels[n].append(('frst', frst_res, 'gray'))
 
-        panels[n].append(('frst', frst_res, 'gray'))
-        
+        ext_minima, min_values = extended_minima(frst_res, 0.6)
+        fg_markers = 1-ext_minima
+        panels[n].append(('fg markers', fg_markers, 'gray'))
+
+        temp = ski.morphology.dilation(fg_markers, ski.morphology.disk(2*n))
+
+        bg_markers = ski.morphology.skeletonize(1-temp)
+        panels[n].append(('bg markers', bg_markers, 'gray'))
+
+        grad = ski.filters.sobel(res)
+        grad += min_values * ext_minima
+        panels[n].append(('image_for_watershed', grad, 'gray'))
+
+        ski.segmentation.watershed(grad, )
+
+
+
+
 
     fig, axes = plt.subplots(len(panels), len(panels[N[0]]), figsize=(2*len(panels[N[0]]), 2*len(panels)))
     for i, n in enumerate(N):
